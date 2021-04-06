@@ -16,6 +16,7 @@ struct t_procces {
     int id;
     int jobs;
     std::vector<int> out;
+    bool intiator;
 };
 
 std::vector<t_procces> read_topology(std::string);
@@ -29,8 +30,13 @@ t_procces pd;
 int my_mq_id;
 std::map<int, int> id_to_mqId;
 
-int main() {
-    std::vector<t_procces> processes = read_topology("topology/tree.json");
+int main(int argc, char** argv) {
+    if(argc < 2) {
+        std::cout << "no topology filename" << std::endl;
+        return 0;
+    }
+
+    std::vector<t_procces> processes = read_topology(argv[1]);
 
     //создание процессов
     pd = processes[0];
@@ -51,7 +57,8 @@ int main() {
     }
 
     //инициализация балансировки нагрузи в root
-    if(pid == 0) {
+    if(pd.intiator) {
+        std::cout << "initiator is " << pd.id << std::endl;
         //инициация балансировки
         my_msg msg;
         msg.mtype = ECHO_ID;
@@ -167,6 +174,7 @@ int main() {
     printf("my pid %i i new have %i jobs\n", pd.id, now_jobs);
     // std::cout << "my pid " << pd.id << " i now have " << now_jobs << " jobs" << std::endl;
 
+    msgctl(my_mq_id,IPC_RMID,NULL);
     return 0;
 }
 
@@ -176,10 +184,12 @@ std::vector<t_procces> read_topology(std::string filename) {
     json j;
     i >> j;
     int size = j["size"].get<int>();
+    int initiator = j["initiator"].get<int>();
     for(int i = 0; i < size; i++) {
         t_procces descr;
         descr.id = j["processes"][i]["id"].get<int>();
         descr.jobs = j["processes"][i]["jobs"].get<int>();
+        descr.intiator = descr.id == initiator;
         auto out = j["processes"][i]["to"];
         for(auto element: out) {
             descr.out.push_back(element.get<int>());

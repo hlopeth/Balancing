@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <string.h>
 
+// #define DEBUG
+
 const int MAX_N = 32;
 const int msg_sz = (MAX_N + MAX_N + 2) * sizeof(int);
 struct my_msg {
@@ -50,9 +52,11 @@ int code(int num1, int num2) {
 int create_mq(int key) {
     int msq_id = msgget(key, IPC_CREAT | 0666);
     // std::cout << "Message queue created with id " << msq_id << std::endl;
+    #ifdef DEBUG
     if(msq_id == -1) {
         std::cout << "create_mq ERROR: " << strerror(errno) << std::endl;
     }
+    #endif
     return msq_id;
 }
 
@@ -60,17 +64,21 @@ void send_msg(int msq_id, my_msg msg) {
     my_msgbuf buf;
     memcpy(&buf, &msg, msg_sz + sizeof(long));
     auto res = msgsnd(msq_id, &buf, msg_sz, 0);
+    #ifdef DEBUG
     if(res == -1) {     
         std::cout << "send_msg ERROR: " << strerror(errno) << " " << msq_id << std::endl;
     };
+    #endif
 }
 
 my_msg recv_msg(int msq_id, int type) {
     my_msgbuf buf;
     auto res = msgrcv(msq_id, &buf, msg_sz, type, 0);
+    #ifdef DEBUG
     if(res == -1) {
         std::cout << "recv_msg ERROR: " << strerror(errno) << std::endl;
-    };
+    }
+    #endif
     my_msg msg;
     memcpy(&msg, &buf, msg_sz + sizeof(long));
     return msg;
@@ -80,17 +88,21 @@ void send_move(int msq_id, move_t move) {
     move_buff buf;
     memcpy(&buf, &move, move_sz + sizeof(long));
     auto res = msgsnd(msq_id, &buf, move_sz, 0);
+    #ifdef DEBUG
     if(res == -1) {     
         std::cout << "send_msg ERROR: " << strerror(errno) << " " << msq_id << std::endl;
-    };
+    }
+    #endif
 }
 
 move_t recv_move(int msq_id, int type) {
     move_buff buf;
     auto res = msgrcv(msq_id, &buf, move_sz, type, 0);
+    #ifdef DEBUG
     if(res == -1) {
         std::cout << "recv_msg ERROR: " << strerror(errno) << std::endl;
-    };
+    }
+    #endif
     move_t move;
     memcpy(&move, &buf, move_sz + sizeof(long));
     return move;
