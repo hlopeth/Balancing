@@ -23,6 +23,22 @@ struct my_msgbuf {
     char data[msg_sz];
 };
 
+const int move_sz = (MAX_N * 3 + 1 ) * sizeof(int);
+struct move_t {
+    long mtype;
+    int from_id[MAX_N];
+    int to_id[MAX_N];
+    int jobs[MAX_N];
+    int n;
+};
+
+struct move_buff {
+    long mtype;
+    char data[move_sz];
+};
+
+
+
 int code(int num1, int num2) {
     int a = std::max(num1, num2);
     int b = std::min(num1, num2);
@@ -56,4 +72,24 @@ my_msg recv_msg(int msq_id, int type) {
     my_msg msg;
     memcpy(&msg, &buf, msg_sz + sizeof(long));
     return msg;
+}
+
+void send_move(int msq_id, move_t move) {
+    move_buff buf;
+    memcpy(&buf, &move, move_sz + sizeof(long));
+    auto res = msgsnd(msq_id, &buf, move_sz, 0);
+    if(res == -1) {     
+        std::cout << "send_msg ERROR: " << strerror(errno) << " " << msq_id << std::endl;
+    };
+}
+
+move_t recv_move(int msq_id, int type) {
+    move_buff buf;
+    auto res = msgrcv(msq_id, &buf, move_sz, type, 0);
+    if(res == -1) {
+        std::cout << "recv_msg ERROR: " << strerror(errno) << std::endl;
+    };
+    move_t move;
+    memcpy(&move, &buf, move_sz + sizeof(long));
+    return move;
 }

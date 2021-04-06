@@ -17,16 +17,10 @@ struct t_procces {
     std::vector<int> out;
 };
 
-struct job_move {
-    int from_id;
-    int to_id;
-    int jobs;
-};
-
 std::vector<t_procces> read_topology(std::string);
 bool has(my_msg msg, int id);
 void add_to_msg(my_msg &bud, int id, int jobs);
-std::vector<job_move> generate_moves(my_msg &msg);
+move_t generate_moves(my_msg &msg);
 
 //procecces data
 t_procces pd;
@@ -83,20 +77,24 @@ int main() {
             }
         }
         //делаем что то с полученными данными
-        std::cout << "results:" << std::endl;
+        std::cout << "before moves:" << std::endl;
         for(int i = 0; i < msg.n; i++) {
             std::cout << "id: " << msg.ids[i] << " job " << msg.jobs[i] << std::endl;
         }
         std::cout << "moves: " << std::endl;
         auto moves = generate_moves(msg);
-        for(int i = 0 ; i < moves.size(); i++) {
-            auto move = moves[i];
-            std::cout << "from " << move.from_id << " to " << move.to_id << " jobs " << move.jobs << std::endl;
+        for(int i = 0 ; i < moves.n; i++) {
+            std::cout << "from " << moves.from_id[i] << " to " << moves.to_id[i] << " jobs " << moves.jobs[i] << std::endl;
         }
-        std::cout << "results:" << std::endl;
-        for(int i = 0; i < msg.n; i++) {
-            std::cout << "id: " << msg.ids[i] << " job " << msg.jobs[i] << std::endl;
-        }
+        // std::cout << "results:" << std::endl;
+        // for(int i = 0; i < msg.n; i++) {
+        //     std::cout << "id: " << msg.ids[i] << " job " << msg.jobs[i] << std::endl;
+        // }
+
+        // for(auto id: pd.out) {
+        //     send_move(id_to_mqId[id], moves);
+        // }
+        
         
     } else {
         //получаем сообщение в свою очередь
@@ -174,20 +172,18 @@ void add_to_msg(my_msg &msg, int id, int jobs) {
 }
 
 
-int get_or_put(std::vector<job_move> &moves, int from_id, int to_id) {
-    for(auto i = 0; i < moves.size(); i++) {
-        if(moves[i].from_id == from_id && moves[i].to_id == to_id)
+int get_or_put(move_t &moves, int from_id, int to_id) {
+    for(auto i = 0; i < moves.n; i++) {
+        if(moves.from_id[i] == from_id && moves.to_id[i] == to_id)
             return i;
     }
 
     //если не нашли
-    job_move new_move = {
-        .from_id = from_id,
-        .to_id = to_id,
-        .jobs = 0
-    };
-    moves.push_back(new_move);
-    return moves.size() - 1;
+    moves.from_id[moves.n] = from_id;
+    moves.to_id[moves.n] = to_id;
+    moves.jobs[moves.n] = 0;
+    moves.n += 1;
+    return moves.n - 1;
 }
 
 void get_min_and_max(my_msg msg, int& min_index, int& max_index) {
@@ -205,8 +201,10 @@ void get_min_and_max(my_msg msg, int& min_index, int& max_index) {
     }
 }
 
-std::vector<job_move> generate_moves(my_msg &msg) {
-    std::vector<job_move> moves;
+move_t generate_moves(my_msg &msg) {
+    move_t moves;
+    moves.n = 0;
+
     int min_index;
     int max_index;
     get_min_and_max(msg, min_index, max_index);
@@ -215,7 +213,7 @@ std::vector<job_move> generate_moves(my_msg &msg) {
         int from_id = msg.ids[max_index];
         int to_id = msg.ids[min_index];
         int move_index = get_or_put(moves, from_id, to_id);
-        moves[move_index].jobs += 1;
+        moves.jobs[move_index] += 1;
         msg.jobs[max_index] -= 1;
         msg.jobs[min_index] += 1;
         get_min_and_max(msg, min_index, max_index);
