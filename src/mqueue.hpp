@@ -23,13 +23,15 @@ struct my_msgbuf {
     char data[msg_sz];
 };
 
-const int move_sz = (MAX_N * 3 + 1 ) * sizeof(int);
+const int move_sz = (MAX_N * 4 + 2 ) * sizeof(int);
 struct move_t {
     long mtype;
     int from_id[MAX_N];
     int to_id[MAX_N];
     int jobs[MAX_N];
     int n;
+    int visited_nodes[MAX_N];
+    int m;
 };
 
 struct move_buff {

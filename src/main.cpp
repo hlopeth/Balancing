@@ -10,6 +10,7 @@
 using json = nlohmann::json;
 
 #define ECHO_ID 1
+#define MOVE_ID 2
 
 struct t_procces {
     int id;
@@ -19,6 +20,7 @@ struct t_procces {
 
 std::vector<t_procces> read_topology(std::string);
 bool has(my_msg msg, int id);
+bool has(move_t move, int id);
 void add_to_msg(my_msg &bud, int id, int jobs);
 move_t generate_moves(my_msg &msg);
 
@@ -47,8 +49,6 @@ int main() {
     for(auto it: pd.out) {
         id_to_mqId[it] = create_mq(it);
     }
-
-    std::cout << "my id " << pd.id << " my mq_id " << my_mq_id << std::endl;
 
     //инициализация балансировки нагрузи в root
     if(pid == 0) {
@@ -91,9 +91,18 @@ int main() {
         //     std::cout << "id: " << msg.ids[i] << " job " << msg.jobs[i] << std::endl;
         // }
 
-        // for(auto id: pd.out) {
-        //     send_move(id_to_mqId[id], moves);
-        // }
+        moves.mtype = MOVE_ID;
+        moves.m = 1;
+        moves.visited_nodes[0] = pd.id;
+        for(auto id: pd.out) {
+            send_move(id_to_mqId[id], moves);
+        }
+        // отправляем самому себе что для общности кода у всех потоков
+        moves.m = pd.out.size();
+        for(int i = 0; i < pd.out.size(); i++) {
+            moves.visited_nodes[i] = pd.out[i];
+        }
+        send_move(my_mq_id, moves); 
         
         
     } else {
@@ -134,6 +143,30 @@ int main() {
         // std::cout << "last send from id " << msg.from_id << " to " << from  << std::endl;
     }
 
+
+    //работа с move_t
+    auto move = recv_move(my_mq_id, MOVE_ID);
+    for(auto id: pd.out) {
+        if(!has(move, id)) {
+            move.visited_nodes[move.m] = id;
+            move.m += 1;
+            send_move(id_to_mqId[id], move);
+        }
+    }
+
+    int now_jobs = pd.jobs;
+    for(int i = 0; i < move.n; i++) {
+        if(move.to_id[i] == pd.id) {
+            now_jobs += move.jobs[i];
+        }
+        if(move.from_id[i] == pd.id) {
+            now_jobs -= move.jobs[i];
+        }
+    }
+    
+    printf("my pid %i i new have %i jobs\n", pd.id, now_jobs);
+    // std::cout << "my pid " << pd.id << " i now have " << now_jobs << " jobs" << std::endl;
+
     return 0;
 }
 
@@ -159,6 +192,14 @@ std::vector<t_procces> read_topology(std::string filename) {
 bool has(my_msg msg, int id) {
     for(int i = 0; i < msg.n; i++) {
         if(msg.ids[i] == id) 
+            return true;
+    }
+    return false;
+}
+
+bool has(move_t move, int id) {
+    for(int i = 0; i < move.m; i++) {
+        if(move.visited_nodes[i] == id) 
             return true;
     }
     return false;
