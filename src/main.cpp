@@ -17,9 +17,16 @@ struct t_procces {
     std::vector<int> out;
 };
 
+struct job_move {
+    int from_id;
+    int to_id;
+    int jobs;
+};
+
 std::vector<t_procces> read_topology(std::string);
 bool has(my_msg msg, int id);
 void add_to_msg(my_msg &bud, int id, int jobs);
+std::vector<job_move> generate_moves(my_msg &msg);
 
 //procecces data
 t_procces pd;
@@ -27,7 +34,7 @@ int my_mq_id;
 std::map<int, int> id_to_mqId;
 
 int main() {
-    std::vector<t_procces> processes = read_topology("topology/simple_tree.json");
+    std::vector<t_procces> processes = read_topology("topology/tree.json");
 
     //создание процессов
     pd = processes[0];
@@ -49,6 +56,7 @@ int main() {
 
     std::cout << "my id " << pd.id << " my mq_id " << my_mq_id << std::endl;
 
+    //инициализация балансировки нагрузи в root
     if(pid == 0) {
         //инициация балансировки
         my_msg msg;
@@ -61,13 +69,13 @@ int main() {
         std::map<int, int> ids_to_jobs;
         //в очереди соседей отправляем сообщение
         for(auto id: pd.out) {
-            std::cout << "send from id " << msg.from_id << " to " << id << std::endl;
+            // std::cout << "send from id " << msg.from_id << " to " << id << std::endl;
             send_msg(id_to_mqId[id], msg);
         }
         //получаем ответы в свою очередь
         for(auto id: pd.out) {
             my_msg res_msg = recv_msg(my_mq_id, ECHO_ID);
-            std::cout << "reciving in to " << pd.id << " from " <<  res_msg.from_id << std::endl;
+            // std::cout << "reciving in to " << pd.id << " from " <<  res_msg.from_id << std::endl;
             for(int i = 0; i < res_msg.n; i++) {
                 if(!has(msg, res_msg.ids[i])) {
                     add_to_msg(msg, res_msg.ids[i], res_msg.jobs[i]);
@@ -79,10 +87,21 @@ int main() {
         for(int i = 0; i < msg.n; i++) {
             std::cout << "id: " << msg.ids[i] << " job " << msg.jobs[i] << std::endl;
         }
+        std::cout << "moves: " << std::endl;
+        auto moves = generate_moves(msg);
+        for(int i = 0 ; i < moves.size(); i++) {
+            auto move = moves[i];
+            std::cout << "from " << move.from_id << " to " << move.to_id << " jobs " << move.jobs << std::endl;
+        }
+        std::cout << "results:" << std::endl;
+        for(int i = 0; i < msg.n; i++) {
+            std::cout << "id: " << msg.ids[i] << " job " << msg.jobs[i] << std::endl;
+        }
+        
     } else {
         //получаем сообщение в свою очередь
         my_msg msg = recv_msg(my_mq_id, ECHO_ID);
-        std::cout << "first reciving in to " << pd.id << " from " << msg.from_id << std::endl;
+        // std::cout << "first reciving in to " << pd.id << " from " << msg.from_id << std::endl;
 
         int from = msg.from_id;
         //добавляем свои данные
@@ -93,7 +112,7 @@ int main() {
         int send_counter = 0;
         for(auto id: pd.out) {
             if(!has(msg, id)) {
-                std::cout << "send from id " << msg.from_id << " to " << id << std::endl;
+                // std::cout << "send from id " << msg.from_id << " to " << id << std::endl;
                 send_msg(id_to_mqId[id], msg);
                 send_counter += 1;
             }
@@ -103,7 +122,7 @@ int main() {
         for (int i = 0; i < send_counter; i++)
         {
             my_msg res_msg = recv_msg(my_mq_id, ECHO_ID);
-            std::cout << "reciving in to " << pd.id << " from " <<  res_msg.from_id << std::endl;
+            // std::cout << "reciving in to " << pd.id << " from " <<  res_msg.from_id << std::endl;
             for (int i = 0; i < res_msg.n; i++)
             {
                 if(!has(msg, res_msg.ids[i])) {
@@ -114,7 +133,7 @@ int main() {
         
         //возвращаем msg
         send_msg(id_to_mqId[from], msg);
-        std::cout << "last send from id " << msg.from_id << " to " << from  << std::endl;
+        // std::cout << "last send from id " << msg.from_id << " to " << from  << std::endl;
     }
 
     return 0;
@@ -152,4 +171,55 @@ void add_to_msg(my_msg &msg, int id, int jobs) {
         msg.ids[n] = id;
         msg.jobs[n] = jobs;
         msg.n += 1;
+}
+
+
+int get_or_put(std::vector<job_move> &moves, int from_id, int to_id) {
+    for(auto i = 0; i < moves.size(); i++) {
+        if(moves[i].from_id == from_id && moves[i].to_id == to_id)
+            return i;
+    }
+
+    //если не нашли
+    job_move new_move = {
+        .from_id = from_id,
+        .to_id = to_id,
+        .jobs = 0
+    };
+    moves.push_back(new_move);
+    return moves.size() - 1;
+}
+
+void get_min_and_max(my_msg msg, int& min_index, int& max_index) {
+    min_index = 0;
+    max_index = 0;
+    for (int i = 0; i < msg.n; i++)
+    {
+        if(msg.jobs[i] < msg.jobs[min_index]) {
+            min_index = i;
+        }
+
+        if(msg.jobs[i] > msg.jobs[max_index]) {
+            max_index = i;
+        }
+    }
+}
+
+std::vector<job_move> generate_moves(my_msg &msg) {
+    std::vector<job_move> moves;
+    int min_index;
+    int max_index;
+    get_min_and_max(msg, min_index, max_index);
+    while (abs(msg.jobs[min_index] - msg.jobs[max_index]) > 1)
+    {
+        int from_id = msg.ids[max_index];
+        int to_id = msg.ids[min_index];
+        int move_index = get_or_put(moves, from_id, to_id);
+        moves[move_index].jobs += 1;
+        msg.jobs[max_index] -= 1;
+        msg.jobs[min_index] += 1;
+        get_min_and_max(msg, min_index, max_index);
+    }
+
+    return moves;   
 }
