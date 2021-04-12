@@ -19,7 +19,6 @@ struct my_msg {
     int n;
     int from_id;
 };
-
 struct my_msgbuf {
     long mtype;
     char data[msg_sz];
@@ -35,10 +34,23 @@ struct move_t {
     int visited_nodes[MAX_N];
     int m;
 };
-
 struct move_buff {
     long mtype;
     char data[move_sz];
+};
+
+const int finn_sz = (MAX_N * 3 + 2) * sizeof(int);
+struct finn_t {
+    long mtype;
+    int inc[MAX_N];
+    int n_inc[MAX_N];
+    int jobs[MAX_N];
+    int inc_size;
+    int n_inc_size;
+};
+struct finn_buff {
+    long mtype;
+    int data[finn_sz];
 };
 
 
@@ -106,4 +118,28 @@ move_t recv_move(int msq_id, int type) {
     move_t move;
     memcpy(&move, &buf, move_sz + sizeof(long));
     return move;
+}
+
+void send_finn(int msq_id, finn_t finn) {
+    finn_buff buf;
+    memcpy(&buf, &finn, finn_sz + sizeof(long));
+    auto res = msgsnd(msq_id, &buf, finn_sz, 0);
+    #ifdef DEBUG
+    if(res == -1) {     
+        std::cout << "send_msg ERROR: " << strerror(errno) << " " << msq_id << std::endl;
+    }
+    #endif
+}
+
+finn_t recv_finn(int msq_id, int type) {
+    finn_buff buf;
+    auto res = msgrcv(msq_id, &buf, finn_sz, type, 0);
+    #ifdef DEBUG
+    if(res == -1) {
+        std::cout << "recv_msg ERROR: " << strerror(errno) << std::endl;
+    }
+    #endif
+    finn_t finn;
+    memcpy(&finn, &buf, finn_sz + sizeof(long));
+    return finn;
 }
